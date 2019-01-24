@@ -48,7 +48,6 @@ namespace RestSharp.Authenticators.OAuth.Extensions
             }
         }
 
-#if !WINDOWS_PHONE && !SILVERLIGHT
         public static void AddRange(this IDictionary<string, string> collection, NameValueCollection range)
         {
             foreach (string key in range.AllKeys)
@@ -63,7 +62,7 @@ namespace RestSharp.Authenticators.OAuth.Extensions
 
             if (collection.Count > 0)
             {
-                sb.Append("?");
+                sb.Append('?');
             }
 
             int count = 0;
@@ -78,12 +77,11 @@ namespace RestSharp.Authenticators.OAuth.Extensions
                     continue;
                 }
 
-                sb.Append("&");
+                sb.Append('&');
             }
 
             return sb.ToString();
         }
-#endif
 
         public static string Concatenate(this WebParameterCollection collection, string separator, string spacer)
         {

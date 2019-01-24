@@ -22,23 +22,22 @@ using System.Collections.Generic;
 using System.Text;
 using RestSharp.Authenticators;
 using RestSharp.Deserializers;
-
-#if NET4 || MONODROID || MONOTOUCH || WP8 || WINDOWS_UWP
 using System.Threading;
 using System.Threading.Tasks;
-#endif
-
-#if FRAMEWORK
 using System.Net.Cache;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
-#endif
+using RestSharp.Serialization;
 
 namespace RestSharp
 {
     public interface IRestClient
     {
+        IRestClient UseSerializer(IRestSerializer serializer);
+
         CookieContainer CookieContainer { get; set; }
+
+        bool AutomaticDecompression { get; set; }
 
         int? MaxRedirects { get; set; }
 
@@ -56,23 +55,62 @@ namespace RestSharp
 
         Encoding Encoding { get; set; }
 
+        bool FailOnDeserializationError { get; set; }
+        
+        string ConnectionGroupName { get; set; }
+
         bool PreAuthenticate { get; set; }
+
+        bool UnsafeAuthenticatedConnectionSharing { get; set; }
 
         IList<Parameter> DefaultParameters { get; }
 
-        RestRequestAsyncHandle ExecuteAsync(IRestRequest request, Action<IRestResponse, RestRequestAsyncHandle> callback);
+        string BaseHost { get; set; }
 
-        RestRequestAsyncHandle ExecuteAsync<T>(IRestRequest request, Action<IRestResponse<T>, RestRequestAsyncHandle> callback);
+        bool AllowMultipleDefaultParametersWithSameName { get; set; }
 
-#if FRAMEWORK
+        RestRequestAsyncHandle ExecuteAsync(IRestRequest request,
+            Action<IRestResponse, RestRequestAsyncHandle> callback);
+
+        RestRequestAsyncHandle ExecuteAsync<T>(IRestRequest request,
+            Action<IRestResponse<T>, RestRequestAsyncHandle> callback);
+
+        RestRequestAsyncHandle ExecuteAsync(IRestRequest request,
+            Action<IRestResponse, RestRequestAsyncHandle> callback, Method httpMethod);
+
+        RestRequestAsyncHandle ExecuteAsync<T>(IRestRequest request,
+            Action<IRestResponse<T>, RestRequestAsyncHandle> callback, Method httpMethod);
+
+        IRestResponse<T> Deserialize<T>(IRestResponse response);
+        
+        /// <summary>
+        /// Allows to use a custom way to encode URL parameters
+        /// </summary>
+        /// <param name="encoder">A delegate to encode URL parameters</param>
+        /// <example>client.UseUrlEncoder(s => HttpUtility.UrlEncode(s));</example>
+        /// <returns></returns>
+        IRestClient UseUrlEncoder(Func<string, string> encoder);
+
+        /// <summary>
+        /// Allows to use a custom way to encode query parameters
+        /// </summary>
+        /// <param name="queryEncoder">A delegate to encode query parameters</param>
+        /// <example>client.UseUrlEncoder((s, encoding) => HttpUtility.UrlEncode(s, encoding));</example>
+        /// <returns></returns>
+        IRestClient UseQueryEncoder(Func<string, Encoding, string> queryEncoder);
+            
         IRestResponse Execute(IRestRequest request);
+
+        IRestResponse Execute(IRestRequest request, Method httpMethod);
 
         IRestResponse<T> Execute<T>(IRestRequest request) where T : new();
 
-        byte[] DownloadData(IRestRequest request);
-#endif
+        IRestResponse<T> Execute<T>(IRestRequest request, Method httpMethod) where T : new();
 
-#if FRAMEWORK
+        byte[] DownloadData(IRestRequest request);
+
+        byte[] DownloadData(IRestRequest request, bool throwOnError);
+
         /// <summary>
         /// X509CertificateCollection to be sent with request
         /// </summary>
@@ -83,19 +121,18 @@ namespace RestSharp
         RequestCachePolicy CachePolicy { get; set; }
 
         bool Pipelined { get; set; }
-#endif
 
         bool FollowRedirects { get; set; }
 
         Uri BuildUri(IRestRequest request);
 
-#if NET45
+        string BuildUriWithoutQueryParameters(IRestRequest request);
+
         /// <summary>
         /// Callback function for handling the validation of remote certificates. Useful for certificate pinning and
         /// overriding certificate errors in the scope of a request.
         /// </summary>
         RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
-#endif
 
         /// <summary>
         /// Executes a GET-style request and callback asynchronously, authenticating if needed
@@ -135,13 +172,38 @@ namespace RestSharp
         RestRequestAsyncHandle ExecuteAsyncPost<T>(IRestRequest request, Action<IRestResponse<T>,
             RestRequestAsyncHandle> callback, string httpMethod);
 
+        /// <summary>
+        /// Add a delegate to apply custom configuration to HttpWebRequest before making a call
+        /// </summary>
+        /// <param name="configurator">Configuration delegate for HttpWebRequest</param>
+        void ConfigureWebRequest(Action<HttpWebRequest> configurator);
+
+        /// <summary>
+        /// Adds or replaces a deserializer for the specified content type
+        /// </summary>
+        /// <param name="contentType">Content type for which the deserializer will be replaced</param>
+        /// <param name="deserializer">Custom deserializer</param>
+        [Obsolete("Use the overload that accepts a factory delegate")]
         void AddHandler(string contentType, IDeserializer deserializer);
 
+        /// <summary>
+        /// Adds or replaces a deserializer for the specified content type
+        /// </summary>
+        /// <param name="contentType">Content type for which the deserializer will be replaced</param>
+        /// <param name="deserializerFactory">Custom deserializer factory</param>
+        void AddHandler(string contentType, Func<IDeserializer> deserializerFactory);
+
+        /// <summary>
+        /// Removes custom deserialzier for the specified content type
+        /// </summary>
+        /// <param name="contentType">Content type for which deserializer needs to be removed</param>
         void RemoveHandler(string contentType);
 
+        /// <summary>
+        /// Remove deserializers for all content types
+        /// </summary>
         void ClearHandlers();
 
-#if FRAMEWORK
         IRestResponse ExecuteAsGet(IRestRequest request, string httpMethod);
 
         IRestResponse ExecuteAsPost(IRestRequest request, string httpMethod);
@@ -149,9 +211,7 @@ namespace RestSharp
         IRestResponse<T> ExecuteAsGet<T>(IRestRequest request, string httpMethod) where T : new();
 
         IRestResponse<T> ExecuteAsPost<T>(IRestRequest request, string httpMethod) where T : new();
-#endif
 
-#if NET4 || MONODROID || MONOTOUCH || WP8 || WINDOWS_UWP
         /// <summary>
         /// Executes the request and callback asynchronously, authenticating if needed
         /// </summary>
@@ -159,6 +219,14 @@ namespace RestSharp
         /// <param name="request">Request to be executed</param>
         /// <param name="token">The cancellation token</param>
         Task<IRestResponse<T>> ExecuteTaskAsync<T>(IRestRequest request, CancellationToken token);
+
+        /// <summary>
+        /// Executes the request asynchronously, authenticating if needed
+        /// </summary>
+        /// <typeparam name="T">Target deserialization type</typeparam>
+        /// <param name="request">Request to be executed</param>
+        /// <param name="httpMethod">Override the request method</param>
+        Task<IRestResponse<T>> ExecuteTaskAsync<T>(IRestRequest request, Method httpMethod);
 
         /// <summary>
         /// Executes the request asynchronously, authenticating if needed
@@ -205,6 +273,14 @@ namespace RestSharp
         Task<IRestResponse> ExecuteTaskAsync(IRestRequest request, CancellationToken token);
 
         /// <summary>
+        /// Executes the request and callback asynchronously, authenticating if needed
+        /// </summary>
+        /// <param name="request">Request to be executed</param>
+        /// <param name="token">The cancellation token</param>
+        /// <param name="httpMethod">Override the request method</param>
+        Task<IRestResponse> ExecuteTaskAsync(IRestRequest request, CancellationToken token, Method httpMethod);
+
+        /// <summary>
         /// Executes the request asynchronously, authenticating if needed
         /// </summary>
         /// <param name="request">Request to be executed</param>
@@ -235,6 +311,5 @@ namespace RestSharp
         /// <param name="request">Request to be executed</param>
         /// <param name="token">The cancellation token</param>
         Task<IRestResponse> ExecutePostTaskAsync(IRestRequest request, CancellationToken token);
-#endif
     }
 }

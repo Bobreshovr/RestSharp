@@ -16,182 +16,140 @@
 
 #endregion
 
-#if FRAMEWORK
-
 using System;
-using System.IO;
+using System.Globalization;
 using System.Net;
 using RestSharp.Extensions;
+using RestSharp.Authenticators.OAuth.Extensions;
 
 namespace RestSharp
 {
     /// <summary>
-    /// HttpWebRequest wrapper (sync methods)
+    ///     HttpWebRequest wrapper (sync methods)
     /// </summary>
     public partial class Http
     {
         /// <summary>
-        /// Execute a POST request
+        ///     Execute a POST request
         /// </summary>
-        public HttpResponse Post()
-        {
-            return this.PostPutInternal("POST");
-        }
+        public HttpResponse Post() => PostPutInternal("POST");
 
         /// <summary>
-        /// Execute a PUT request
+        ///     Execute a PUT request
         /// </summary>
-        public HttpResponse Put()
-        {
-            return this.PostPutInternal("PUT");
-        }
+        public HttpResponse Put() => PostPutInternal("PUT");
 
         /// <summary>
-        /// Execute a GET request
+        ///     Execute a GET request
         /// </summary>
-        public HttpResponse Get()
-        {
-            return this.GetStyleMethodInternal("GET");
-        }
+        public HttpResponse Get() => GetStyleMethodInternal("GET");
 
         /// <summary>
-        /// Execute a HEAD request
+        ///     Execute a HEAD request
         /// </summary>
-        public HttpResponse Head()
-        {
-            return this.GetStyleMethodInternal("HEAD");
-        }
+        public HttpResponse Head() => GetStyleMethodInternal("HEAD");
 
         /// <summary>
-        /// Execute an OPTIONS request
+        ///     Execute an OPTIONS request
         /// </summary>
-        public HttpResponse Options()
-        {
-            return this.GetStyleMethodInternal("OPTIONS");
-        }
+        public HttpResponse Options() => GetStyleMethodInternal("OPTIONS");
 
         /// <summary>
-        /// Execute a DELETE request
+        ///     Execute a DELETE request
         /// </summary>
-        public HttpResponse Delete()
-        {
-            return this.GetStyleMethodInternal("DELETE");
-        }
+        public HttpResponse Delete() => GetStyleMethodInternal("DELETE");
 
         /// <summary>
-        /// Execute a PATCH request
+        ///     Execute a PATCH request
         /// </summary>
-        public HttpResponse Patch()
-        {
-            return this.PostPutInternal("PATCH");
-        }
+        public HttpResponse Patch() => PostPutInternal("PATCH");
 
         /// <summary>
-        /// Execute a MERGE request
+        ///     Execute a MERGE request
         /// </summary>
-        public HttpResponse Merge()
-        {
-            return this.PostPutInternal("MERGE");
-        }
+        public HttpResponse Merge() => PostPutInternal("MERGE");
 
         /// <summary>
-        /// Execute a GET-style request with the specified HTTP Method.  
+        ///     Execute a GET-style request with the specified HTTP Method.
         /// </summary>
         /// <param name="httpMethod">The HTTP method to execute.</param>
         /// <returns></returns>
-        public HttpResponse AsGet(string httpMethod)
-        {
-            return this.GetStyleMethodInternal(httpMethod.ToUpperInvariant());
-        }
+        public HttpResponse AsGet(string httpMethod) => GetStyleMethodInternal(httpMethod.ToUpperInvariant());
 
         /// <summary>
-        /// Execute a POST-style request with the specified HTTP Method.  
+        ///     Execute a POST-style request with the specified HTTP Method.
         /// </summary>
         /// <param name="httpMethod">The HTTP method to execute.</param>
         /// <returns></returns>
-        public HttpResponse AsPost(string httpMethod)
-        {
-            return this.PostPutInternal(httpMethod.ToUpperInvariant());
-        }
+        public HttpResponse AsPost(string httpMethod) => PostPutInternal(httpMethod.ToUpperInvariant());
 
         private HttpResponse GetStyleMethodInternal(string method)
         {
-            HttpWebRequest webRequest = this.ConfigureWebRequest(method, this.Url);
+            var webRequest = ConfigureWebRequest(method, Url);
 
-            if (this.HasBody && (method == "DELETE" || method == "OPTIONS"))
+            if (HasBody && (method == "DELETE" || method == "OPTIONS"))
             {
-                webRequest.ContentType = this.RequestContentType;
-                this.WriteRequestBody(webRequest);
+                webRequest.ContentType = RequestContentType;
+                WriteRequestBody(webRequest);
             }
 
-            return this.GetResponse(webRequest);
+            return GetResponse(webRequest);
         }
 
         private HttpResponse PostPutInternal(string method)
         {
-            HttpWebRequest webRequest = this.ConfigureWebRequest(method, this.Url);
+            var webRequest = ConfigureWebRequest(method, Url);
 
-            this.PreparePostBody(webRequest);
+            PreparePostBody(webRequest);
 
-            this.WriteRequestBody(webRequest);
-            return this.GetResponse(webRequest);
+            WriteRequestBody(webRequest);
+            return GetResponse(webRequest);
         }
 
         partial void AddSyncHeaderActions()
         {
-            //this.restrictedHeaderActions.Add("Connection", (r, v) => r.Connection = v);
-            this.restrictedHeaderActions.Add("Connection", (r, v) => {
-                if (v.ToLower().Contains("keep-alive"))
-                    r.KeepAlive = true; //if a user sets the connection header explicitly to "keep-alive" then we set the field on HttpWebRequest
-                else
-                    r.KeepAlive = false; //if "Connection" is specified as anything else, we turn off keep alive functions
+            restrictedHeaderActions.Add("Connection", (r, v) => { r.KeepAlive = v.ToLower().Contains("keep-alive"); });
+            restrictedHeaderActions.Add("Content-Length", (r, v) => r.ContentLength = Convert.ToInt64(v));
+            restrictedHeaderActions.Add("Expect", (r, v) => r.Expect = v);
+            restrictedHeaderActions.Add("If-Modified-Since",
+                (r, v) => r.IfModifiedSince = Convert.ToDateTime(v, CultureInfo.InvariantCulture));
+            restrictedHeaderActions.Add("Referer", (r, v) => r.Referer = v);
+            restrictedHeaderActions.Add("Transfer-Encoding", (r, v) =>
+            {
+                r.TransferEncoding = v;
+                r.SendChunked = true;
             });
-            this.restrictedHeaderActions.Add("Content-Length", (r, v) => r.ContentLength = Convert.ToInt64(v));
-            this.restrictedHeaderActions.Add("Expect", (r, v) => r.Expect = v);
-            this.restrictedHeaderActions.Add("If-Modified-Since", (r, v) => r.IfModifiedSince = Convert.ToDateTime(v));
-            this.restrictedHeaderActions.Add("Referer", (r, v) => r.Referer = v);
-            this.restrictedHeaderActions.Add("Transfer-Encoding", (r, v) =>
-                                                                  {
-                                                                      r.TransferEncoding = v;
-                                                                      r.SendChunked = true;
-                                                                  });
-            this.restrictedHeaderActions.Add("User-Agent", (r, v) => r.UserAgent = v);
+            restrictedHeaderActions.Add("User-Agent", (r, v) => r.UserAgent = v);
         }
 
-        private void ExtractErrorResponse(HttpResponse httpResponse, Exception ex)
+        private static HttpResponse ExtractErrorResponse(Exception ex)
         {
-            WebException webException = ex as WebException;
-
-            if (webException != null && webException.Status == WebExceptionStatus.Timeout)
+            var response = new HttpResponse {ErrorMessage = ex.Message};
+            if (ex is WebException webException && webException.Status == WebExceptionStatus.Timeout)
             {
-                httpResponse.ResponseStatus = ResponseStatus.TimedOut;
-                httpResponse.ErrorMessage = ex.Message;
-                httpResponse.ErrorException = webException;
-
-                return;
+                response.ResponseStatus = ResponseStatus.TimedOut;
+                response.ErrorException = webException;
+            }
+            else
+            {
+                response.ErrorException = ex;
+                response.ResponseStatus = ResponseStatus.Error;
             }
 
-            httpResponse.ErrorMessage = ex.Message;
-            httpResponse.ErrorException = ex;
-            httpResponse.ResponseStatus = ResponseStatus.Error;
+            return response;
         }
 
         private HttpResponse GetResponse(HttpWebRequest request)
         {
-            HttpResponse response = new HttpResponse { ResponseStatus = ResponseStatus.None };
-
             try
             {
-                HttpWebResponse webResponse = GetRawResponse(request);
-
-                this.ExtractResponseData(response, webResponse);
+                using (var webResponse = GetRawResponse(request))
+                    return ExtractResponseData(webResponse);
             }
             catch (Exception ex)
             {
-                this.ExtractErrorResponse(response, ex);
+                return ExtractErrorResponse(ex);
             }
-
-            return response;
         }
 
         private static HttpWebResponse GetRawResponse(HttpWebRequest request)
@@ -202,22 +160,14 @@ namespace RestSharp
             }
             catch (WebException ex)
             {
-#if MONODROID
-                // In Android the connections might start to hang (never return 
-                // responces) after 3 sequential connection failures (i.e: exceptions)
-                request.Abort();
-#endif
-
                 // Check to see if this is an HTTP error or a transport error.
                 // In cases where an HTTP error occurs ( status code >= 400 )
                 // return the underlying HTTP response, otherwise assume a
                 // transport exception (ex: connection timeout) and
                 // rethrow the exception
 
-                if (ex.Response is HttpWebResponse)
-                {
-                    return ex.Response as HttpWebResponse;
-                }
+                if (ex.Response is HttpWebResponse response)
+                    return response;
 
                 throw;
             }
@@ -225,106 +175,93 @@ namespace RestSharp
 
         private void WriteRequestBody(HttpWebRequest webRequest)
         {
-            if (this.HasBody || this.HasFiles || this.AlwaysMultipartFormData)
-            {
-#if !WINDOWS_PHONE
-                webRequest.ContentLength = this.CalculateContentLength();
-#endif
-            }
+            if (HasBody || HasFiles || AlwaysMultipartFormData)
+                webRequest.ContentLength = CalculateContentLength();
 
-            using (Stream requestStream = webRequest.GetRequestStream())
+            using (var requestStream = webRequest.GetRequestStream())
             {
-                if (this.HasFiles || this.AlwaysMultipartFormData)
-                {
-                    this.WriteMultipartFormData(requestStream);
-                }
-                else if (this.RequestBodyBytes != null)
-                {
-                    requestStream.Write(this.RequestBodyBytes, 0, this.RequestBodyBytes.Length);
-                }
-                else if (this.RequestBody != null)
-                {
-                    this.WriteStringTo(requestStream, this.RequestBody);
-                }
+                if (HasFiles || AlwaysMultipartFormData)
+                    WriteMultipartFormData(requestStream);
+                else if (RequestBodyBytes != null)
+                    requestStream.Write(RequestBodyBytes, 0, RequestBodyBytes.Length);
+                else if (RequestBody != null)
+                    WriteStringTo(requestStream, RequestBody);
             }
         }
 
-        // TODO: Try to merge the shared parts between ConfigureWebRequest and ConfigureAsyncWebRequest (quite a bit of code
-        // TODO: duplication at the moment).
-        private HttpWebRequest ConfigureWebRequest(string method, Uri url)
+        [Obsolete("Use the WebRequestConfigurator delegate instead of overriding this method")]
+        protected virtual HttpWebRequest ConfigureWebRequest(string method, Uri url)
         {
-            HttpWebRequest webRequest = (HttpWebRequest) WebRequest.Create(url);
+            var webRequest = CreateWebRequest(url);
 
-            webRequest.UseDefaultCredentials = this.UseDefaultCredentials;
-            webRequest.PreAuthenticate = this.PreAuthenticate;
-            webRequest.ServicePoint.Expect100Continue = false;
+            webRequest.UseDefaultCredentials = UseDefaultCredentials;
 
-            this.AppendHeaders(webRequest);
-            this.AppendCookies(webRequest);
+            webRequest.PreAuthenticate = PreAuthenticate;
+            webRequest.Pipelined = Pipelined;
+            webRequest.UnsafeAuthenticatedConnectionSharing = UnsafeAuthenticatedConnectionSharing;
+#if NETSTANDARD2_0
+            webRequest.Proxy = null;
+#endif
+            try
+            {
+                webRequest.ServicePoint.Expect100Continue = false;
+            }
+            catch (PlatformNotSupportedException)
+            {
+                // Avoid to crash in UWP apps
+            }
+
+            AppendHeaders(webRequest);
+            AppendCookies(webRequest);
+
+            if (Host != null) webRequest.Host = Host;
 
             webRequest.Method = method;
 
             // make sure Content-Length header is always sent since default is -1
-            if (!this.HasFiles && !this.AlwaysMultipartFormData)
-            {
+            if (!HasFiles && !AlwaysMultipartFormData && method != "GET")
                 webRequest.ContentLength = 0;
-            }
 
-            webRequest.AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip | DecompressionMethods.None;
+            if (Credentials != null)
+                webRequest.Credentials = Credentials;
 
-#if FRAMEWORK
-            if (this.ClientCertificates != null)
+            if (UserAgent.HasValue())
+                webRequest.UserAgent = UserAgent;
+
+            if (ClientCertificates != null)
+                webRequest.ClientCertificates.AddRange(ClientCertificates);
+
+            AllowedDecompressionMethods.ForEach(x => { webRequest.AutomaticDecompression |= x; });
+
+            if (AutomaticDecompression)
             {
-                webRequest.ClientCertificates.AddRange(this.ClientCertificates);
-            }
-#endif
-
-            if (this.UserAgent.HasValue())
-            {
-                webRequest.UserAgent = this.UserAgent;
+                webRequest.AutomaticDecompression =
+                    DecompressionMethods.Deflate | DecompressionMethods.GZip | DecompressionMethods.None;
             }
 
-            if (this.Timeout != 0)
-            {
-                webRequest.Timeout = this.Timeout;
-            }
+            if (Timeout != 0)
+                webRequest.Timeout = Timeout;
 
-            if (this.ReadWriteTimeout != 0)
-            {
-                webRequest.ReadWriteTimeout = this.ReadWriteTimeout;
-            }
+            if (ReadWriteTimeout != 0)
+                webRequest.ReadWriteTimeout = ReadWriteTimeout;
 
-            if (this.Credentials != null)
-            {
-                webRequest.Credentials = this.Credentials;
-            }
+            webRequest.Proxy = Proxy;
 
-            if (this.Proxy != null)
-            {
-                webRequest.Proxy = this.Proxy;
-            }
+            if (CachePolicy != null)
+                webRequest.CachePolicy = CachePolicy;
 
-#if FRAMEWORK
-            if (this.CachePolicy != null)
-            {
-                webRequest.CachePolicy = this.CachePolicy;
-            }
-#endif
+            webRequest.AllowAutoRedirect = FollowRedirects;
 
-            webRequest.AllowAutoRedirect = this.FollowRedirects;
+            if (FollowRedirects && MaxRedirects.HasValue)
+                webRequest.MaximumAutomaticRedirections = MaxRedirects.Value;
 
-            if (this.FollowRedirects && this.MaxRedirects.HasValue)
-            {
-                webRequest.MaximumAutomaticRedirections = this.MaxRedirects.Value;
-            }
+            webRequest.ServerCertificateValidationCallback = RemoteCertificateValidationCallback;
 
-#if NET45
-            webRequest.ServerCertificateValidationCallback = this.RemoteCertificateValidationCallback;
-#endif
+            webRequest.ConnectionGroupName = ConnectionGroupName;
+
+            WebRequestConfigurator?.Invoke(webRequest);
 
             return webRequest;
         }
     }
 }
-
-#endif

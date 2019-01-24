@@ -11,225 +11,227 @@ namespace RestSharp.IntegrationTests
     [TestFixture]
     public class MultipartFormDataTests
     {
-        private readonly string expected =
-            "-------------------------------28947758029299" + Environment.NewLine +
-            "Content-Disposition: form-data; name=\"foo\"" + Environment.NewLine + Environment.NewLine +
-            "bar" + Environment.NewLine +
-            "-------------------------------28947758029299" + Environment.NewLine +
-            "Content-Disposition: form-data; name=\"a name with spaces\"" + Environment.NewLine + Environment.NewLine +
-            "somedata" + Environment.NewLine +
-            "-------------------------------28947758029299--" + Environment.NewLine;
-
-        private readonly string expectedFileAndBodyRequestContent =
-            "-------------------------------28947758029299" + Environment.NewLine +
-            "Content-Type: application/json" + Environment.NewLine +
-            "Content-Disposition: form-data; name=\"controlName\"" + Environment.NewLine + Environment.NewLine +
-            "test" + Environment.NewLine +
-            "-------------------------------28947758029299" + Environment.NewLine +
-            "Content-Disposition: form-data; name=\"fileName\"; filename=\"TestFile.txt\"" + Environment.NewLine +
-            "Content-Type: application/octet-stream" + Environment.NewLine + Environment.NewLine +
-            "This is a test file for RestSharp." + Environment.NewLine +
-            "-------------------------------28947758029299--" + Environment.NewLine;
-
-        [Test]
-        public void MultipartFormData_WithParameterAndFile_Async()
+        [SetUp]
+        public void SetupServer()
         {
-            const string baseUrl = "http://localhost:8888/";
-
-            using (SimpleServer.Create(baseUrl, EchoHandler))
-            {
-                RestClient client = new RestClient(baseUrl);
-                RestRequest request = new RestRequest("/", Method.POST)
-                                      {
-                                          AlwaysMultipartFormData = true
-                                      };
-                DirectoryInfo directoryInfo = Directory.GetParent(Directory.GetCurrentDirectory())
-                                                       .Parent;
-
-                if (directoryInfo != null)
-                {
-                    string path = Path.Combine(directoryInfo.FullName,
-                        "Assets\\TestFile.txt");
-
-                    request.AddFile("fileName", path);
-                }
-
-                request.AddParameter("controlName", "test", "application/json", ParameterType.RequestBody);
-
-                Task task = client.ExecuteTaskAsync(request)
-                                  .ContinueWith(x =>
-                                                {
-                                                    Assert.AreEqual(this.expectedFileAndBodyRequestContent, x.Result.Content);
-                                                });
-
-                task.Wait();
-            }
+            _server = SimpleServer.Create(BaseUrl, RequestHandler.Handle);
+            _client = new RestClient(BaseUrl);
         }
 
-        [Test]
-        public void MultipartFormData_WithParameterAndFile()
+        [TearDown]
+        public void ShutdownServer()
         {
-            const string baseUrl = "http://localhost:8888/";
-
-            using (SimpleServer.Create(baseUrl, EchoHandler))
-            {
-                RestClient client = new RestClient(baseUrl);
-                RestRequest request = new RestRequest("/", Method.POST)
-                                      {
-                                          AlwaysMultipartFormData = true
-                                      };
-                DirectoryInfo directoryInfo = Directory.GetParent(Directory.GetCurrentDirectory())
-                                                       .Parent;
-
-                if (directoryInfo != null)
-                {
-                    string path = Path.Combine(directoryInfo.FullName, "Assets\\TestFile.txt");
-
-                    request.AddFile("fileName", path);
-                }
-
-                request.AddParameter("controlName", "test", "application/json", ParameterType.RequestBody);
-
-                IRestResponse response = client.Execute(request);
-
-                Assert.AreEqual(this.expectedFileAndBodyRequestContent, response.Content);
-            }
+            _server.Dispose();
         }
 
-        public void MultipartFormDataAsync()
-        {
-            const string baseUrl = "http://localhost:8888/";
+        private const string LineBreak = "\r\n";
 
-            using (SimpleServer.Create(baseUrl, EchoHandler))
+        private readonly string _expected =
+            "-------------------------------28947758029299" + LineBreak +
+            "Content-Disposition: form-data; name=\"foo\"" + LineBreak + LineBreak +
+            "bar" + LineBreak +
+            "-------------------------------28947758029299" + LineBreak +
+            "Content-Disposition: form-data; name=\"a name with spaces\"" + LineBreak + LineBreak +
+            "somedata" + LineBreak +
+            "-------------------------------28947758029299--" + LineBreak;
+
+        private readonly string _expectedFileAndBodyRequestContent =
+            "-------------------------------28947758029299" + LineBreak +
+            "Content-Type: application/json" + LineBreak +
+            "Content-Disposition: form-data; name=\"controlName\"" + LineBreak + LineBreak +
+            "test" + LineBreak +
+            "-------------------------------28947758029299" + LineBreak +
+            "Content-Disposition: form-data; name=\"fileName\"; filename=\"TestFile.txt\"" + LineBreak +
+            "Content-Type: application/octet-stream" + LineBreak + LineBreak +
+            "This is a test file for RestSharp." + LineBreak +
+            "-------------------------------28947758029299--" + LineBreak;
+
+        private readonly string _expectedDefaultMultipartContentType =
+            "multipart/form-data; boundary=-----------------------------28947758029299";
+
+        private readonly string _expectedCustomMultipartContentType =
+            "multipart/vnd.resteasy+form-data; boundary=-----------------------------28947758029299";
+
+        private SimpleServer _server;
+        private RestClient _client;
+
+        private const string BaseUrl = "http://localhost:8888/";
+
+        private static class RequestHandler
+        {
+            public static string CapturedContentType { get; set; }
+
+            public static void Handle(HttpListenerContext context)
             {
-                RestClient client = new RestClient(baseUrl);
-                RestRequest request = new RestRequest("/", Method.POST)
-                                      {
-                                          AlwaysMultipartFormData = true
-                                      };
-
-                AddParameters(request);
-
-                client.ExecuteAsync(request, (restResponse, handle) =>
-                                             {
-                                                 Console.WriteLine(restResponse.Content);
-                                                 Assert.AreEqual(this.expected, restResponse.Content);
-                                             });
+                CapturedContentType = context.Request.ContentType;
+                Handlers.Echo(context);
             }
-        }
-
-        [Test]
-        public void MultipartFormData()
-        {
-            const string baseUrl = "http://localhost:8888/";
-
-            using (SimpleServer.Create(baseUrl, EchoHandler))
-            {
-                RestClient client = new RestClient(baseUrl);
-                RestRequest request = new RestRequest("/", Method.POST)
-                                      {
-                                          AlwaysMultipartFormData = true
-                                      };
-
-                AddParameters(request);
-
-                IRestResponse response = client.Execute(request);
-
-                Assert.AreEqual(this.expected, response.Content);
-            }
-        }
-
-        [Test]
-        public void AlwaysMultipartFormData_WithParameter_Execute()
-        {
-            const string baseUrl = "http://localhost:8888/";
-
-            using (SimpleServer.Create(baseUrl, EchoHandler))
-            {
-                RestClient client = new RestClient(baseUrl);
-                RestRequest request = new RestRequest("?json_route=/posts")
-                                      {
-                                          AlwaysMultipartFormData = true,
-                                          Method = Method.POST,
-                                      };
-
-                request.AddParameter("title", "test", ParameterType.RequestBody);
-
-                IRestResponse response = client.Execute(request);
-
-                Assert.Null(response.ErrorException);
-            }
-        }
-
-        [Test]
-        public void AlwaysMultipartFormData_WithParameter_ExecuteTaskAsync()
-        {
-            const string baseUrl = "http://localhost:8888/";
-
-            using (SimpleServer.Create(baseUrl, EchoHandler))
-            {
-                RestClient client = new RestClient(baseUrl);
-                RestRequest request = new RestRequest("?json_route=/posts")
-                                      {
-                                          AlwaysMultipartFormData = true,
-                                          Method = Method.POST,
-                                      };
-
-                request.AddParameter("title", "test", ParameterType.RequestBody);
-
-                Task task = client.ExecuteTaskAsync(request)
-                                  .ContinueWith(x => { Assert.Null(x.Result.ErrorException); });
-
-                task.Wait();
-            }
-        }
-
-        [Test]
-        public void AlwaysMultipartFormData_WithParameter_ExecuteAsync()
-        {
-            const string baseUrl = "http://localhost:8888/";
-
-            using (SimpleServer.Create(baseUrl, EchoHandler))
-            {
-                RestClient client = new RestClient(baseUrl);
-                RestRequest request = new RestRequest("?json_route=/posts")
-                                      {
-                                          AlwaysMultipartFormData = true,
-                                          Method = Method.POST,
-                                      };
-
-                request.AddParameter("title", "test", ParameterType.RequestBody);
-
-                IRestResponse syncResponse = null;
-
-                using (AutoResetEvent eventWaitHandle = new AutoResetEvent(false))
-                {
-                    client.ExecuteAsync(request, response =>
-                                                 {
-                                                     syncResponse = response;
-                                                     eventWaitHandle.Set();
-                                                 });
-
-                    eventWaitHandle.WaitOne();
-                }
-
-                Assert.Null(syncResponse.ErrorException);
-            }
-        }
-
-        private static void EchoHandler(HttpListenerContext obj)
-        {
-            obj.Response.StatusCode = 200;
-
-            StreamReader streamReader = new StreamReader(obj.Request.InputStream);
-
-            obj.Response.OutputStream.WriteStringUtf8(streamReader.ReadToEnd());
         }
 
         private static void AddParameters(IRestRequest request)
         {
             request.AddParameter("foo", "bar");
             request.AddParameter("a name with spaces", "somedata");
+        }
+
+        [Test]
+        public void AlwaysMultipartFormData_WithParameter_Execute()
+        {
+            var request = new RestRequest("?json_route=/posts")
+            {
+                AlwaysMultipartFormData = true,
+                Method = Method.POST
+            };
+
+            request.AddParameter("title", "test", ParameterType.RequestBody);
+
+            var response = _client.Execute(request);
+
+            Assert.Null(response.ErrorException);
+        }
+
+        [Test]
+        public void AlwaysMultipartFormData_WithParameter_ExecuteAsync()
+        {
+            var request = new RestRequest("?json_route=/posts")
+            {
+                AlwaysMultipartFormData = true,
+                Method = Method.POST
+            };
+
+            request.AddParameter("title", "test", ParameterType.RequestBody);
+
+            IRestResponse syncResponse = null;
+
+            using (var eventWaitHandle = new AutoResetEvent(false))
+            {
+                _client.ExecuteAsync(request, response =>
+                {
+                    syncResponse = response;
+                    eventWaitHandle.Set();
+                });
+
+                eventWaitHandle.WaitOne();
+            }
+
+            Assert.Null(syncResponse.ErrorException);
+        }
+
+        [Test]
+        public async Task AlwaysMultipartFormData_WithParameter_ExecuteTaskAsync()
+        {
+            var request = new RestRequest("?json_route=/posts")
+            {
+                AlwaysMultipartFormData = true,
+                Method = Method.POST
+            };
+
+            request.AddParameter("title", "test", ParameterType.RequestBody);
+
+            var response = await _client.ExecuteTaskAsync(request);
+            Assert.Null(response.ErrorException);
+        }
+
+        [Test]
+        public void MultipartFormData()
+        {
+            var request = new RestRequest("/", Method.POST)
+            {
+                AlwaysMultipartFormData = true
+            };
+
+            AddParameters(request);
+
+            var response = _client.Execute(request);
+
+            Assert.AreEqual(_expected, response.Content);
+        }
+
+        [Test]
+        public void MultipartFormData_HasDefaultContentType()
+        {
+            var request = new RestRequest("/", Method.POST);
+
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets\\TestFile.txt");
+            request.AddFile("fileName", path);
+
+            request.AddParameter("controlName", "test", "application/json", ParameterType.RequestBody);
+
+            var response = _client.Execute(request);
+
+            Assert.AreEqual(_expectedFileAndBodyRequestContent, response.Content);
+            Assert.AreEqual(_expectedDefaultMultipartContentType, RequestHandler.CapturedContentType);
+        }
+
+        [Test]
+        public void MultipartFormData_WithCustomContentType()
+        {
+            var request = new RestRequest("/", Method.POST);
+
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets\\TestFile.txt");
+            var customContentType = "multipart/vnd.resteasy+form-data";
+            request.AddHeader("Content-Type", customContentType);
+
+            request.AddFile("fileName", path);
+
+            request.AddParameter("controlName", "test", "application/json", ParameterType.RequestBody);
+
+            var response = _client.Execute(request);
+
+            Assert.AreEqual(_expectedFileAndBodyRequestContent, response.Content);
+            Assert.AreEqual(_expectedCustomMultipartContentType, RequestHandler.CapturedContentType);
+        }
+
+        [Test]
+        public void MultipartFormData_WithParameterAndFile()
+        {
+            var request = new RestRequest("/", Method.POST)
+            {
+                AlwaysMultipartFormData = true
+            };
+
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets\\TestFile.txt");
+            request.AddFile("fileName", path);
+
+            request.AddParameter("controlName", "test", "application/json", ParameterType.RequestBody);
+
+            var response = _client.Execute(request);
+
+            Assert.AreEqual(_expectedFileAndBodyRequestContent, response.Content);
+        }
+
+        [Test]
+        public async Task MultipartFormData_WithParameterAndFile_Async()
+        {
+            var request = new RestRequest("/", Method.POST)
+            {
+                AlwaysMultipartFormData = true
+            };
+
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets\\TestFile.txt");
+            request.AddFile("fileName", path);
+
+            request.AddParameter("controlName", "test", "application/json", ParameterType.RequestBody);
+
+            var response = await _client.ExecuteTaskAsync(request);
+            Assert.AreEqual(_expectedFileAndBodyRequestContent, response.Content);
+        }
+
+        [Test]
+        public void MultipartFormDataAsync()
+        {
+            var request = new RestRequest("/", Method.POST)
+            {
+                AlwaysMultipartFormData = true
+            };
+
+            AddParameters(request);
+
+            _client.ExecuteAsync(request, (restResponse, handle) =>
+            {
+                Console.WriteLine(restResponse.Content);
+                Assert.AreEqual(_expected, restResponse.Content);
+            });
         }
     }
 }

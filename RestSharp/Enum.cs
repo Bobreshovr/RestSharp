@@ -26,7 +26,8 @@ namespace RestSharp
         UrlSegment,
         HttpHeader,
         RequestBody,
-        QueryString
+        QueryString,
+        QueryStringWithoutEncode
     }
 
     /// <summary>
@@ -35,7 +36,8 @@ namespace RestSharp
     public enum DataFormat
     {
         Json,
-        Xml
+        Xml,
+        None
     }
 
     /// <summary>
@@ -51,6 +53,7 @@ namespace RestSharp
         OPTIONS,
         PATCH,
         MERGE,
+        COPY
     }
 
     /// <summary>

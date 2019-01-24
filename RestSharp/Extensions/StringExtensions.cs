@@ -18,56 +18,38 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Globalization;
-
-#if WINDOWS_PHONE
-using System.Net;
-#endif
-
-#if SILVERLIGHT
-using System.Windows.Browser;
-#endif
-
-#if !SILVERLIGHT && !WINDOWS_PHONE
-using RestSharp.Extensions.MonoHttp;
-#endif
+using System.Web;
 
 namespace RestSharp.Extensions
 {
     public static class StringExtensions
     {
-        public static string UrlDecode(this string input)
-        {
-            return HttpUtility.UrlDecode(input);
-        }
+        public static string UrlDecode(this string input) => HttpUtility.UrlDecode(input);
 
         /// <summary>
-        /// Uses Uri.EscapeDataString() based on recommendations on MSDN
-        /// http://blogs.msdn.com/b/yangxind/archive/2006/11/09/don-t-use-net-system-uri-unescapedatastring-in-url-decoding.aspx
+        ///     Uses Uri.EscapeDataString() based on recommendations on MSDN
+        ///     http://blogs.msdn.com/b/yangxind/archive/2006/11/09/don-t-use-net-system-uri-unescapedatastring-in-url-decoding.aspx
         /// </summary>
         public static string UrlEncode(this string input)
         {
             const int maxLength = 32766;
 
             if (input == null)
-            {
-                throw new ArgumentNullException("input");
-            }
+                throw new ArgumentNullException(nameof(input));
 
             if (input.Length <= maxLength)
-            {
                 return Uri.EscapeDataString(input);
-            }
 
-            StringBuilder sb = new StringBuilder(input.Length * 2);
-            int index = 0;
+            var sb = new StringBuilder(input.Length * 2);
+            var index = 0;
 
             while (index < input.Length)
             {
-                int length = Math.Min(input.Length - index, maxLength);
-                string subString = input.Substring(index, length);
+                var length = Math.Min(input.Length - index, maxLength);
+                var subString = input.Substring(index, length);
 
                 sb.Append(Uri.EscapeDataString(subString));
                 index += subString.Length;
@@ -76,46 +58,38 @@ namespace RestSharp.Extensions
             return sb.ToString();
         }
 
-        public static string HtmlDecode(this string input)
+        public static string HtmlDecode(this string input) => HttpUtility.HtmlDecode(input);
+
+        public static string HtmlEncode(this string input) => HttpUtility.HtmlEncode(input);
+
+        public static string UrlEncode(this string input, Encoding encoding)
         {
-            return HttpUtility.HtmlDecode(input);
+            var encoded = HttpUtility.UrlEncode(input, encoding);
+            return encoded?.Replace("+", "%20");
         }
 
-        public static string HtmlEncode(this string input)
-        {
-            return HttpUtility.HtmlEncode(input);
-        }
-
-#if FRAMEWORK
-        public static string HtmlAttributeEncode(this string input)
-        {
-            return HttpUtility.HtmlAttributeEncode(input);
-        }
-#endif
+        public static string HtmlAttributeEncode(this string input) => HttpUtility.HtmlAttributeEncode(input);
 
         /// <summary>
-        /// Check that a string is not null or empty
+        ///     Check that a string is not null or empty
         /// </summary>
         /// <param name="input">String to check</param>
         /// <returns>bool</returns>
-        public static bool HasValue(this string input)
-        {
-            return !string.IsNullOrEmpty(input);
-        }
+        public static bool HasValue(this string input) => !string.IsNullOrEmpty(input);
 
         /// <summary>
-        /// Remove underscores from a string
+        ///     Remove underscores from a string
         /// </summary>
         /// <param name="input">String to process</param>
         /// <returns>string</returns>
-        public static string RemoveUnderscoresAndDashes(this string input)
-        {
-            return input.Replace("_", "")
-                        .Replace("-", ""); // avoiding regex
-        }
+        public static string RemoveUnderscoresAndDashes(this string input) =>
+            input.Replace("_", "").Replace("-", "");
+
+        private static readonly Regex DateRegex = new Regex(@"\\?/Date\((-?\d+)(-|\+)?([0-9]{4})?\)\\?/");
+        private static readonly Regex NewDateRegex = new Regex(@"newDate\((-?\d+)*\)");
 
         /// <summary>
-        /// Parses most common JSON date formats
+        ///     Parses most common JSON date formats
         /// </summary>
         /// <param name="input">JSON value to parse</param>
         /// <param name="culture"></param>
@@ -123,51 +97,41 @@ namespace RestSharp.Extensions
         public static DateTime ParseJsonDate(this string input, CultureInfo culture)
         {
             const long maxAllowedTimestamp = 253402300799;
-            
+
             input = input.Replace("\n", "");
             input = input.Replace("\r", "");
             input = input.RemoveSurroundingQuotes();
 
-            long unix;
-
-            if (long.TryParse(input, out unix))
+            if (long.TryParse(input, out var unix))
             {
-                DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-                if (unix > maxAllowedTimestamp)
-                    return epoch.AddMilliseconds(unix);
-                else
-                    return epoch.AddSeconds(unix);
+                return unix > maxAllowedTimestamp ? epoch.AddMilliseconds(unix) : epoch.AddSeconds(unix);
             }
 
             if (input.Contains("/Date("))
-            {
-                return ExtractDate(input, @"\\?/Date\((-?\d+)(-|\+)?([0-9]{4})?\)\\?/", culture);
-            }
+                return ExtractDate(input, DateRegex, culture);
 
             if (input.Contains("new Date("))
             {
                 input = input.Replace(" ", "");
 
                 // because all whitespace is removed, match against newDate( instead of new Date(
-                return ExtractDate(input, @"newDate\((-?\d+)*\)", culture);
+                return ExtractDate(input, NewDateRegex, culture);
             }
 
             return ParseFormattedDate(input, culture);
         }
 
         /// <summary>
-        /// Remove leading and trailing " from a string
+        ///     Remove leading and trailing " from a string
         /// </summary>
         /// <param name="input">String to parse</param>
         /// <returns>String</returns>
         public static string RemoveSurroundingQuotes(this string input)
         {
             if (input.StartsWith("\"") && input.EndsWith("\""))
-            {
-                // remove leading/trailing quotes
                 input = input.Substring(1, input.Length - 2);
-            }
 
             return input;
         }
@@ -183,76 +147,52 @@ namespace RestSharp.Extensions
                 "yyyy-MM-dd HH:mm:ssZ",
                 "yyyy-MM-ddTHH:mm:ss",
                 "yyyy-MM-ddTHH:mm:sszzzzzz",
+                "yyyy-MM-ddTHH:mm:ss.fffZ",
                 "M/d/yyyy h:mm:ss tt" // default format for invariant culture
             };
 
-            DateTime date;
-
-            if (DateTime.TryParseExact(input, formats, culture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out date))
-            {
+            if (DateTime.TryParseExact(input, formats, culture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var date))
                 return date;
-            }
-
-            if (DateTime.TryParse(input, culture, DateTimeStyles.None, out date))
-            {
-                return date;
-            }
-
-            return default(DateTime);
+            return DateTime.TryParse(input, culture, DateTimeStyles.None, out date) ? date : default(DateTime);
         }
 
-        private static DateTime ExtractDate(string input, string pattern, CultureInfo culture)
+        private static DateTime ExtractDate(string input, Regex regex, CultureInfo culture)
         {
-            DateTime dt = DateTime.MinValue;
-            Regex regex = new Regex(pattern);
+            var dt = DateTime.MinValue;
 
-            if (regex.IsMatch(input))
-            {
-                MatchCollection matches = regex.Matches(input);
-                Match match = matches[0];
-                long ms = Convert.ToInt64(match.Groups[1].Value);
-                DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            if (!regex.IsMatch(input)) return dt;
 
-                dt = epoch.AddMilliseconds(ms);
+            var matches = regex.Matches(input);
+            var match = matches[0];
+            var ms = Convert.ToInt64(match.Groups[1].Value);
+            var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-                // adjust if time zone modifier present
-                if (match.Groups.Count > 2 && !string.IsNullOrEmpty(match.Groups[3].Value))
-                {
-                    DateTime mod = DateTime.ParseExact(match.Groups[3].Value, "HHmm", culture);
+            dt = epoch.AddMilliseconds(ms);
 
-                    dt = match.Groups[2].Value == "+"
-                        ? dt.Add(mod.TimeOfDay)
-                        : dt.Subtract(mod.TimeOfDay);
-                }
-            }
+            // adjust if time zone modifier present
+            if (match.Groups.Count <= 2 || string.IsNullOrEmpty(match.Groups[3].Value)) return dt;
+
+            var mod = DateTime.ParseExact(match.Groups[3].Value, "HHmm", culture);
+
+            dt = match.Groups[2].Value == "+"
+                ? dt.Add(mod.TimeOfDay)
+                : dt.Subtract(mod.TimeOfDay);
 
             return dt;
         }
 
         /// <summary>
-        /// Checks a string to see if it matches a regex
-        /// </summary>
-        /// <param name="input">String to check</param>
-        /// <param name="pattern">Pattern to match</param>
-        /// <returns>bool</returns>
-        public static bool Matches(this string input, string pattern)
-        {
-            return Regex.IsMatch(input, pattern);
-        }
-
-        /// <summary>
-        /// Converts a string to pascal case
+        ///     Converts a string to pascal case
         /// </summary>
         /// <param name="lowercaseAndUnderscoredWord">String to convert</param>
         /// <param name="culture"></param>
         /// <returns>string</returns>
-        public static string ToPascalCase(this string lowercaseAndUnderscoredWord, CultureInfo culture)
-        {
-            return ToPascalCase(lowercaseAndUnderscoredWord, true, culture);
-        }
+        public static string ToPascalCase(this string lowercaseAndUnderscoredWord, CultureInfo culture) =>
+            ToPascalCase(lowercaseAndUnderscoredWord, true, culture);
 
         /// <summary>
-        /// Converts a string to pascal case with the option to remove underscores
+        ///     Converts a string to pascal case with the option to remove underscores
         /// </summary>
         /// <param name="text">String to convert</param>
         /// <param name="removeUnderscores">Option to remove underscores</param>
@@ -261,146 +201,122 @@ namespace RestSharp.Extensions
         public static string ToPascalCase(this string text, bool removeUnderscores, CultureInfo culture)
         {
             if (string.IsNullOrEmpty(text))
-            {
                 return text;
-            }
 
-            text = text.Replace("_", " ");
+            text = text.Replace('_', ' ');
 
-            string joinString = removeUnderscores
+            var joinString = removeUnderscores
                 ? string.Empty
                 : "_";
-            string[] words = text.Split(' ');
+            var words = text.Split(' ');
 
-            if (words.Length > 1 || words[0].IsUpperCase())
+            if (words.Length <= 1 && !words[0].IsUpperCase())
+                return string.Concat(words[0].Substring(0, 1).ToUpper(culture), words[0].Substring(1));
+
+            for (var i = 0; i < words.Length; i++)
             {
-                for (int i = 0; i < words.Length; i++)
-                {
-                    if (words[i].Length > 0)
-                    {
-                        string word = words[i];
-                        string restOfWord = word.Substring(1);
+                if (words[i].Length <= 0) continue;
 
-                        if (restOfWord.IsUpperCase())
-                        {
-#if !WINDOWS_UWP
-                            restOfWord = restOfWord.ToLower(culture);
-#else
-                            restOfWord = restOfWord.ToLower();
-#endif
-                        }
+                var word = words[i];
+                var restOfWord = word.Substring(1);
 
-#if !WINDOWS_UWP                        
-                        char firstChar = char.ToUpper(word[0], culture);
-#else
-                        char firstChar = char.ToUpper(word[0]);
-#endif
+                if (restOfWord.IsUpperCase())
+                    restOfWord = restOfWord.ToLower(culture);
 
-                        words[i] = string.Concat(firstChar, restOfWord);
-                    }
-                }
+                var firstChar = char.ToUpper(word[0], culture);
 
-                return string.Join(joinString, words);
+                words[i] = string.Concat(firstChar, restOfWord);
             }
 
-#if !WINDOWS_UWP
-            return string.Concat(words[0].Substring(0, 1).ToUpper(culture), words[0].Substring(1));
-#else
-            return string.Concat(words[0].Substring(0, 1).ToUpper(), words[0].Substring(1));
-#endif
+            return string.Join(joinString, words);
         }
 
         /// <summary>
-        /// Converts a string to camel case
+        ///     Converts a string to camel case
         /// </summary>
         /// <param name="lowercaseAndUnderscoredWord">String to convert</param>
         /// <param name="culture"></param>
         /// <returns>String</returns>
-        public static string ToCamelCase(this string lowercaseAndUnderscoredWord, CultureInfo culture)
-        {
-            return MakeInitialLowerCase(ToPascalCase(lowercaseAndUnderscoredWord, culture));
-        }
+        public static string ToCamelCase(this string lowercaseAndUnderscoredWord, CultureInfo culture) =>
+            MakeInitialLowerCase(ToPascalCase(lowercaseAndUnderscoredWord, culture));
 
         /// <summary>
-        /// Convert the first letter of a string to lower case
+        ///     Convert the first letter of a string to lower case
         /// </summary>
         /// <param name="word">String to convert</param>
         /// <returns>string</returns>
-        public static string MakeInitialLowerCase(this string word)
-        {
-            return string.Concat(word.Substring(0, 1).ToLower(), word.Substring(1));
-        }
+        public static string MakeInitialLowerCase(this string word) =>
+            string.Concat(word.Substring(0, 1).ToLower(), word.Substring(1));
+
+        private static readonly Regex IsUpperCaseRegex = new Regex(@"^[A-Z]+$");
 
         /// <summary>
-        /// Checks to see if a string is all uppper case
+        ///     Checks to see if a string is all uppper case
         /// </summary>
         /// <param name="inputString">String to check</param>
         /// <returns>bool</returns>
-        public static bool IsUpperCase(this string inputString)
-        {
-            return Regex.IsMatch(inputString, @"^[A-Z]+$");
-        }
+        public static bool IsUpperCase(this string inputString) => IsUpperCaseRegex.IsMatch(inputString);
+
+        private static readonly Regex AddUnderscoresRegex1 = new Regex(@"[-\s]");
+        private static readonly Regex AddUnderscoresRegex2 = new Regex(@"([a-z\d])([A-Z])");
+        private static readonly Regex AddUnderscoresRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
 
         /// <summary>
-        /// Add underscores to a pascal-cased string
+        ///     Add underscores to a pascal-cased string
         /// </summary>
         /// <param name="pascalCasedWord">String to convert</param>
         /// <returns>string</returns>
-        public static string AddUnderscores(this string pascalCasedWord)
-        {
-            return Regex.Replace(
-                Regex.Replace(
-                    Regex.Replace(pascalCasedWord, @"([A-Z]+)([A-Z][a-z])", "$1_$2"),
-                    @"([a-z\d])([A-Z])",
+        public static string AddUnderscores(this string pascalCasedWord) =>
+            AddUnderscoresRegex1.Replace(
+                AddUnderscoresRegex2.Replace(
+                    AddUnderscoresRegex3.Replace(pascalCasedWord, "$1_$2"),
                     "$1_$2"),
-                @"[-\s]",
                 "_");
-        }
+
+        private static readonly Regex AddDashesRegex1 = new Regex(@"[\s]");
+        private static readonly Regex AddDashesRegex2 = new Regex(@"([a-z\d])([A-Z])");
+        private static readonly Regex AddDashesRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
 
         /// <summary>
-        /// Add dashes to a pascal-cased string
+        ///     Add dashes to a pascal-cased string
         /// </summary>
         /// <param name="pascalCasedWord">String to convert</param>
         /// <returns>string</returns>
-        public static string AddDashes(this string pascalCasedWord)
-        {
-            return Regex.Replace(
-                Regex.Replace(
-                    Regex.Replace(pascalCasedWord, @"([A-Z]+)([A-Z][a-z])", "$1-$2"),
-                    @"([a-z\d])([A-Z])",
+        public static string AddDashes(this string pascalCasedWord) =>
+            AddDashesRegex1.Replace(
+                AddDashesRegex2.Replace(
+                    AddDashesRegex3.Replace(pascalCasedWord, "$1-$2"),
                     "$1-$2"),
-                @"[\s]",
                 "-");
-        }
 
         /// <summary>
-        /// Add an undescore prefix to a pascasl-cased string
+        ///     Add an undescore prefix to a pascasl-cased string
         /// </summary>
         /// <param name="pascalCasedWord"></param>
         /// <returns></returns>
-        public static string AddUnderscorePrefix(this string pascalCasedWord)
-        {
-            return string.Format("_{0}", pascalCasedWord);
-        }
+        public static string AddUnderscorePrefix(this string pascalCasedWord) => string.Format("_{0}", pascalCasedWord);
+
+        private static readonly Regex AddSpacesRegex1 = new Regex(@"[-\s]");
+        private static readonly Regex AddSpacesRegex2 = new Regex(@"([a-z\d])([A-Z])");
+        private static readonly Regex AddSpacesRegex3 = new Regex(@"([A-Z]+)([A-Z][a-z])");
 
         /// <summary>
-        /// Add spaces to a pascal-cased string
+        ///     Add spaces to a pascal-cased string
         /// </summary>
         /// <param name="pascalCasedWord">String to convert</param>
         /// <returns>string</returns>
-        public static string AddSpaces(this string pascalCasedWord)
-        {
-            return Regex.Replace(
-                Regex.Replace(
-                    Regex.Replace(pascalCasedWord, @"([A-Z]+)([A-Z][a-z])", "$1 $2"),
-                    @"([a-z\d])([A-Z])",
+        public static string AddSpaces(this string pascalCasedWord) =>
+            AddSpacesRegex1.Replace(
+                AddSpacesRegex2.Replace(
+                    AddSpacesRegex3.Replace(pascalCasedWord, "$1 $2"),
                     "$1 $2"),
-                @"[-\s]",
                 " ");
-        }
+
+        internal static bool IsEmpty(this string value) => string.IsNullOrWhiteSpace(value);
+        internal static bool IsNotEmpty(this string value) => !string.IsNullOrWhiteSpace(value);
 
         /// <summary>
-        /// Return possible variants of a name for name matching.
+        ///     Return possible variants of a name for name matching.
         /// </summary>
         /// <param name="name">String to convert</param>
         /// <param name="culture">The culture to use for conversion</param>
@@ -408,9 +324,7 @@ namespace RestSharp.Extensions
         public static IEnumerable<string> GetNameVariants(this string name, CultureInfo culture)
         {
             if (string.IsNullOrEmpty(name))
-            {
                 yield break;
-            }
 
             yield return name;
 
@@ -418,31 +332,19 @@ namespace RestSharp.Extensions
             yield return name.ToCamelCase(culture);
 
             // try lower cased name
-#if !WINDOWS_UWP
             yield return name.ToLower(culture);
-#else
-            yield return name.ToLowerInvariant();
-#endif
 
             // try name with underscores
             yield return name.AddUnderscores();
 
             // try name with underscores with lower case
-#if !WINDOWS_UWP
             yield return name.AddUnderscores().ToLower(culture);
-#else
-            yield return name.AddUnderscores().ToLowerInvariant();
-#endif
 
             // try name with dashes
             yield return name.AddDashes();
 
             // try name with dashes with lower case
-#if !WINDOWS_UWP
             yield return name.AddDashes().ToLower(culture);
-#else
-            yield return name.AddDashes().ToLowerInvariant();
-#endif
 
             // try name with underscore prefix
             yield return name.AddUnderscorePrefix();
@@ -454,11 +356,7 @@ namespace RestSharp.Extensions
             yield return name.AddSpaces();
 
             // try name with spaces with lower case
-#if !WINDOWS_UWP
             yield return name.AddSpaces().ToLower(culture);
-#else
-            yield return name.AddSpaces().ToLowerInvariant();
-#endif
         }
     }
 }

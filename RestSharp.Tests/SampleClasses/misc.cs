@@ -19,6 +19,7 @@
 using System;
 using System.Collections.Generic;
 using RestSharp.Serializers;
+using RestSharp.Deserializers;
 
 namespace RestSharp.Tests.SampleClasses
 {
@@ -77,6 +78,18 @@ namespace RestSharp.Tests.SampleClasses
         {
             public string Name { get; set; }
         }
+    }
+
+    public class ValueCollectionForXml
+    {
+        public string Value { get; set; }
+        public List<ValueForXml> Values { get; set; }
+    }
+
+    public class ValueForXml
+    {
+        public DateTime Timestamp { get; set; }
+        public string Value { get; set; }
     }
 
     public class IncomingInvoice
@@ -292,5 +305,37 @@ namespace RestSharp.Tests.SampleClasses
     public class DecimalNumber
     {
         public decimal Value { get; set; }
+    }
+
+    public class Note
+    {
+        public const string TITLE = "What a note.";
+        public const string MESSAGE = "Content";
+
+        [SerializeAs(Attribute = true)]
+        [DeserializeAs(Attribute = true)]
+        public int Id { get; set; }
+
+        [SerializeAs(Content = true)]
+        [DeserializeAs(Content = true)]
+        public string Message { get; set; }
+
+        public string Title { get; set; }
+    }
+
+    public class WrongNote
+    {
+        [SerializeAs(Content = true)]
+        [DeserializeAs(Content = true)]
+        public int Id { get; set; }
+
+        [SerializeAs(Content = true)]
+        [DeserializeAs(Content = true)]
+        public string Text { get; set; }
+    }
+
+    public class DateTimeResponse
+    {
+        public DateTime CreatedOn { get; set; }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Net;
 using NUnit.Framework;
 using RestSharp.IntegrationTests.Helpers;
@@ -173,6 +174,88 @@ namespace RestSharp.IntegrationTests
             }
         }
 
+        [Test]
+        public void Can_Be_Added_To_COPY_Request()
+        {
+            const Method httpMethod = Method.COPY;
+
+            using (SimpleServer.Create(BASE_URL, Handlers.Generic<RequestBodyCapturer>()))
+            {
+                RestClient client = new RestClient(BASE_URL);
+                RestRequest request = new RestRequest(RequestBodyCapturer.RESOURCE, httpMethod);
+
+                const string contentType = "text/plain";
+                const string bodyData = "abc123 foo bar baz BING!";
+
+                request.AddParameter(contentType, bodyData, ParameterType.RequestBody);
+
+                client.Execute(request);
+
+                AssertHasRequestBody(contentType, bodyData);
+            }
+        }
+
+        [Test]
+        public void MultipartFormData_Without_File_Creates_A_Valid_RequestBody()
+        {
+            string expectedFormBoundary = "-------------------------------28947758029299";
+
+
+            using (SimpleServer.Create(BASE_URL, Handlers.Generic<RequestBodyCapturer>()))
+            {
+                RestClient client = new RestClient(BASE_URL);
+
+                RestRequest request = new RestRequest(RequestBodyCapturer.RESOURCE, Method.POST)
+                {
+                    AlwaysMultipartFormData = true
+                };
+
+                const string contentType = "text/plain";
+                const string bodyData = "abc123 foo bar baz BING!";
+                const string multipartName = "mybody";
+
+                request.AddParameter(multipartName, bodyData, contentType, ParameterType.RequestBody);
+
+                client.Execute(request);
+
+                string expectedBody = expectedFormBoundary +
+                                      Environment.NewLine
+                                      + "Content-Type: " +
+                                      contentType
+                                      + Environment.NewLine
+                                      + @"Content-Disposition: form-data; name=""" + multipartName + @""""
+                                      + Environment.NewLine
+                                      + Environment.NewLine
+                                      + bodyData
+                                      + Environment.NewLine
+                                      + expectedFormBoundary + "--"
+                                      + Environment.NewLine;
+
+                Console.WriteLine(RequestBodyCapturer.CapturedEntityBody);
+                Assert.AreEqual(expectedBody, RequestBodyCapturer.CapturedEntityBody, "Empty multipart generated: " + RequestBodyCapturer.CapturedEntityBody);
+            }
+        }
+
+        [Test]
+        public void Query_Parameters_With_Json_Body()
+        {
+            const Method httpMethod = Method.PUT;
+
+            using (SimpleServer.Create(BASE_URL, Handlers.Generic<RequestBodyCapturer>()))
+            {
+                var client = new RestClient(BASE_URL);
+                var request = new RestRequest(RequestBodyCapturer.RESOURCE, httpMethod)
+                    .AddJsonBody(new {displayName = "Display Name"})
+                    .AddQueryParameter("key", "value");
+
+                client.Execute(request);
+
+                Assert.AreEqual("http://localhost:8888/Capture?key=value", RequestBodyCapturer.CapturedUrl.ToString());
+                Assert.AreEqual("application/json", RequestBodyCapturer.CapturedContentType);
+                Assert.AreEqual("{\"displayName\":\"Display Name\"}", RequestBodyCapturer.CapturedEntityBody);
+            }
+        }
+        
         private static void AssertHasNoRequestBody()
         {
             Assert.Null(RequestBodyCapturer.CapturedContentType);
@@ -197,6 +280,8 @@ namespace RestSharp.IntegrationTests
 
             public static string CapturedEntityBody { get; set; }
 
+            public static Uri CapturedUrl { get; set; }
+            
             public static void Capture(HttpListenerContext context)
             {
                 HttpListenerRequest request = context.Request;
@@ -204,8 +289,9 @@ namespace RestSharp.IntegrationTests
                 CapturedContentType = request.ContentType;
                 CapturedHasEntityBody = request.HasEntityBody;
                 CapturedEntityBody = StreamToString(request.InputStream);
+                CapturedUrl = request.Url;
             }
-
+            
             private static string StreamToString(Stream stream)
             {
                 StreamReader streamReader = new StreamReader(stream);

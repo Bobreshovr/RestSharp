@@ -16,6 +16,8 @@
 
 #endregion
 
+using RestSharp.Serialization;
+
 namespace RestSharp
 {
     /// <summary>
@@ -23,6 +25,22 @@ namespace RestSharp
     /// </summary>
     public class Parameter
     {
+        public Parameter()
+        {
+        }
+
+        public Parameter(string name, object value, ParameterType type) : this()
+        {
+            Name = name;
+            Value = value;
+            Type = type;
+        }
+
+        public Parameter(string name, object value, string contentType, ParameterType type) : this(name, value, type)
+        {
+            ContentType = contentType;
+        }
+
         /// <summary>
         /// Name of the parameter
         /// </summary>
@@ -39,6 +57,11 @@ namespace RestSharp
         public ParameterType Type { get; set; }
 
         /// <summary>
+        /// Body parameter data type
+        /// </summary>
+        public DataFormat DataFormat { get; set; } = DataFormat.None;
+
+        /// <summary>
         /// MIME content type of the parameter
         /// </summary>
         public string ContentType { get; set; }
@@ -47,9 +70,27 @@ namespace RestSharp
         /// Return a human-readable representation of this parameter
         /// </summary>
         /// <returns>String</returns>
-        public override string ToString()
+        public override string ToString() => $"{Name}={Value}";
+    }
+
+    public class XmlParameter : Parameter
+    {
+        public XmlParameter(string name, object value, string xmlNamespace = null) : base(name, value, ParameterType.RequestBody)
         {
-            return string.Format("{0}={1}", this.Name, this.Value);
+            XmlNamespace = xmlNamespace;
+            DataFormat = DataFormat.Xml;
+            ContentType = Serialization.ContentType.Xml;
+        }
+
+        public string XmlNamespace { get; }
+    }
+
+    public class JsonParameter : Parameter
+    {
+        public JsonParameter(string name, object value) : base(name, value, ParameterType.RequestBody)
+        {
+            DataFormat = DataFormat.Json;
+            ContentType = Serialization.ContentType.Json;
         }
     }
 }

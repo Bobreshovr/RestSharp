@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Threading;
 using NUnit.Framework;
 using RestSharp.Authenticators.OAuth;
@@ -45,24 +46,55 @@ namespace RestSharp.Tests
         }
 
         [Test]
-        [TestCase("The quick brown fox jumps over the lazy dog", "rVL90tHhGt0eQ0TCITY74nVL22P%2FltlWS7WvJXpECPs%3D")]
-        [TestCase("The quick\tbrown\nfox\rjumps\r\nover\t\tthe\n\nlazy\r\n\r\ndog", "C%2B2RY0Hna6VrfK1crCkU%2FV1e0ECoxoDh41iOOdmEMx8%3D")]
-        [TestCase("", "%2BnkCwZfv%2FQVmBbNZsPKbBT3kAg3JtVn3f3YMBtV83L8%3D")]
-        [TestCase(" !\"#$%&'()*+,", "xcTgWGBVZaw%2Bilg6kjWAGt%2FhCcsVBMMe1CcDEnxnh8Y%3D")]
-        public void HmacSha256_Hashes_Correctly(string value, string expected)
+        [TestCase("The quick brown fox jumps over the lazy dog", "rVL90tHhGt0eQ0TCITY74nVL22P%2FltlWS7WvJXpECPs%3D",
+            "12345678")]
+        [TestCase("The quick\tbrown\nfox\rjumps\r\nover\t\tthe\n\nlazy\r\n\r\ndog",
+            "C%2B2RY0Hna6VrfK1crCkU%2FV1e0ECoxoDh41iOOdmEMx8%3D", "12345678")]
+        [TestCase("", "%2BnkCwZfv%2FQVmBbNZsPKbBT3kAg3JtVn3f3YMBtV83L8%3D", "12345678")]
+        [TestCase(" !\"#$%&'()*+,", "xcTgWGBVZaw%2Bilg6kjWAGt%2FhCcsVBMMe1CcDEnxnh8Y%3D", "12345678")]
+        [TestCase("AB", "JJgraAxzpO2Q6wiC3blM4eiQeA9WmkALaZI8yGRH4qM%3D", "CD!")]
+        public void HmacSha256_Hashes_Correctly(string value, string expected, string consumerSecret)
         {
-            string consumerSecret = "12345678";
             string actual = OAuthTools.GetSignature(OAuthSignatureMethod.HmacSha256, value, consumerSecret);
 
             Assert.AreEqual(expected, actual);
         }
 
         [Test]
-        [ExpectedException(typeof(ArgumentNullException))]
         public void HmacSha256_Does_Not_Accept_Nulls()
         {
             string consumerSecret = "12345678";
-            string actual = OAuthTools.GetSignature(OAuthSignatureMethod.HmacSha256, null, consumerSecret);
+            Assert.That(() => OAuthTools.GetSignature(OAuthSignatureMethod.HmacSha256, null, consumerSecret),
+                Throws.TypeOf<ArgumentNullException>());
         }
+
+#if !NETCOREAPP
+        [Test]
+        [TestCase("The quick brown fox jumps over the lazy dog", 1024)]
+        [TestCase("The quick brown fox jumps over the lazy dog", 2048)]
+        [TestCase("The quick brown fox jumps over the lazy dog", 4096)]
+        [TestCase("", 2048)]
+        [TestCase(" !\"#$%&'()*+,", 2048)]
+        public void RsaSha1_Signs_Correctly(string value, int keySize)
+        {
+            SHA1Managed hasher = new SHA1Managed();
+            byte[] hash = hasher.ComputeHash(value.GetBytes());
+
+            using (var crypto = new RSACryptoServiceProvider(keySize) {PersistKeyInCsp = false})
+            {
+                string privateKey = crypto.ToXmlString(true);
+
+                string signature = OAuthTools.GetSignature(
+                    OAuthSignatureMethod.RsaSha1,
+                    OAuthSignatureTreatment.Unescaped,
+                    value,
+                    privateKey);
+
+                byte[] signatureBytes = Convert.FromBase64String(signature);
+
+                Assert.IsTrue(crypto.VerifyHash(hash, CryptoConfig.MapNameToOID("SHA1"), signatureBytes));
+            }
+        }
+#endif
     }
 }
